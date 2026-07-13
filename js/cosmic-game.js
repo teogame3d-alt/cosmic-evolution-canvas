@@ -6,7 +6,7 @@
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const BUILD_VERSION = "2026.07.13h";
+  const BUILD_VERSION = "2026.07.13i";
   const SCORE_KEY = "tg3d-cosmic-evolution-scores";
 
   const ui = {
@@ -118,6 +118,7 @@
     edgeWarningAt: -99,
     hazardWarningAt: -99,
     shrapnelWarningAt: -99,
+    lastBodyCollisionExplosionAt: -99,
     finalSnapshot: null,
     debugVisible: false,
     quality: "high",
@@ -443,6 +444,7 @@
     state.edgeWarningAt = -99;
     state.hazardWarningAt = -99;
     state.shrapnelWarningAt = -99;
+    state.lastBodyCollisionExplosionAt = -99;
     state.finalSnapshot = null;
     state.soundEvents = [];
     state.impactShake = 0;
@@ -670,12 +672,13 @@
       dangerous: hazardRoll,
       gravityWell: hazardRoll && (radius > state.player.radius * 0.96 || state.stageIndex >= 3),
       unstable: hazardRoll && Math.random() > (state.width < 640 ? 0.56 : 0.48),
-      collisionCooldown: 0,
+      spawnedAt: state.elapsed,
+      collisionCooldown: initial ? 48 : 28,
       sharpFragment: false,
     };
 
     state.bodies.push(body);
-    const limit = qualityLimit(state.width < 640 ? 18 : 30);
+    const limit = qualityLimit(state.width < 640 ? 24 : 38);
     trimBodies(limit);
   }
 
@@ -892,8 +895,9 @@
         dangerous: impactForce > 14 && Math.random() > 0.62,
         gravityWell: false,
         unstable: false,
-        collisionCooldown: 16,
-        sharpFragment: impactForce > 10 && Math.random() > 0.35,
+        spawnedAt: state.elapsed,
+        collisionCooldown: 34,
+        sharpFragment: impactForce > 16 && Math.random() > 0.55,
       });
     }
 
@@ -1131,8 +1135,9 @@
 
   function updateBodyCollisions(dt) {
     if (state.bodies.length < 2) return;
-    const bodies = state.bodies.slice(0, state.quality === "low" ? 22 : 34);
+    const bodies = state.bodies.slice(0, state.quality === "low" ? 16 : 26);
     const remove = new Set();
+    const playerGravity = gravityRadius();
 
     for (let i = 0; i < bodies.length; i += 1) {
       const first = bodies[i];
@@ -1143,11 +1148,12 @@
         if (!second || second.absorbing || remove.has(second)) continue;
         second.collisionCooldown = Math.max(0, (second.collisionCooldown || 0) - dt);
         if ((first.collisionCooldown || 0) > 0 || (second.collisionCooldown || 0) > 0) continue;
+        if (state.elapsed - Math.max(first.spawnedAt || 0, second.spawnedAt || 0) < 1.15) continue;
 
         const dx = second.x - first.x;
         const dy = second.y - first.y;
         const dist = Math.max(1, Math.hypot(dx, dy));
-        const contact = (first.radius + second.radius) * 0.68;
+        const contact = (first.radius + second.radius) * 0.54;
         if (dist > contact) continue;
 
         const nx = dx / dist;
@@ -1155,17 +1161,30 @@
         const relativeVx = second.vx - first.vx;
         const relativeVy = second.vy - first.vy;
         const impactSpeed = Math.hypot(relativeVx, relativeVy);
-        const unstableHit = first.unstable || second.unstable || first.gravityWell || second.gravityWell;
-        const explosiveHit = impactSpeed > (state.width < 640 ? 2.55 : 2.25) || unstableHit;
+        const larger = first.radius >= second.radius ? first : second;
+        const smaller = larger === first ? second : first;
+        const sizeRatio = larger.radius / Math.max(smaller.radius, 1);
+        const massRatio = larger.mass / Math.max(smaller.mass, 0.1);
+        const nearPlayerField = Math.hypot(first.x - state.player.x, first.y - state.player.y) < playerGravity * 1.2 ||
+          Math.hypot(second.x - state.player.x, second.y - state.player.y) < playerGravity * 1.2;
+        const inPlayerOrbit = first.captured || second.captured || first.orbiting || second.orbiting || first.orbitAlpha > 0.22 || second.orbitAlpha > 0.22;
+        const comparableBodies = sizeRatio < 1.55 && massRatio < 2.05;
+        const bothSubstantial = Math.min(first.radius, second.radius) > Math.max(10, state.player.radius * 0.42);
+        const gravityDuel = (first.gravityWell && second.gravityWell) || (first.unstable && second.unstable && comparableBodies);
+        const hardImpact = impactSpeed > (state.width < 640 ? 5.6 : 5.1);
+        const explosionCooldownReady = state.elapsed - state.lastBodyCollisionExplosionAt > (state.width < 640 ? 6.8 : 5.4);
+        const explosiveHit = !nearPlayerField && !inPlayerOrbit && explosionCooldownReady && bothSubstantial && hardImpact && state.stageIndex >= 3 && (comparableBodies || gravityDuel);
 
-        first.vx -= nx * (0.6 + impactSpeed * 0.18);
-        first.vy -= ny * (0.6 + impactSpeed * 0.18);
-        second.vx += nx * (0.6 + impactSpeed * 0.18);
-        second.vy += ny * (0.6 + impactSpeed * 0.18);
-        first.collisionCooldown = 18;
-        second.collisionCooldown = 18;
+        const bounce = inPlayerOrbit ? 0.32 : 0.42 + Math.min(0.42, impactSpeed * 0.08);
+        first.vx -= nx * bounce;
+        first.vy -= ny * bounce;
+        second.vx += nx * bounce;
+        second.vy += ny * bounce;
+        first.collisionCooldown = inPlayerOrbit ? 38 : 54;
+        second.collisionCooldown = inPlayerOrbit ? 38 : 54;
 
         if (explosiveHit) {
+          state.lastBodyCollisionExplosionAt = state.elapsed;
           explodeAsteroidCollision(first, second, nx, ny, impactSpeed, remove);
           break;
         }
