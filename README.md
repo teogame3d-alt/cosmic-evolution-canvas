@@ -4,6 +4,12 @@ Cosmic Evolution is an original HTML5 Canvas gravity game prototype built as a p
 
 It is not a clone of any commercial game. The project uses a familiar cosmic sandbox idea - mass growth, gravity, orbiting bodies, hazards and a final universe cycle - as a small, inspectable browser-game case study.
 
+## Portfolio Demo & Authorship Note
+
+This repository is public on purpose: recruiters and technical reviewers can inspect the implementation, run the game locally, and compare it with the live portfolio deployment.
+
+The code is released for learning and review under the repository license. The TeoGame&3D branding, personal portfolio presentation, authorship context and visual identity remain associated with Rusu Florin Teodor and should not be reused to impersonate this portfolio or present the project as someone else's original career work.
+
 ## Why This Project Exists
 
 This project is meant to demonstrate junior-level engineering signals in a visual, interactive form:
@@ -13,7 +19,7 @@ This project is meant to demonstrate junior-level engineering signals in a visua
 - procedural asteroid and planet generation
 - simplified orbital gravity
 - secondary body-to-body gravity for small orbital interactions
-- collision, damage and fragment systems
+- collision, damage, fragment and asteroid-persistence tuning systems
 - gravity-well hazards, asteroid shrapnel, entropy pressure and edge pressure
 - animated absorption states instead of instant object removal
 - gravity-safe cleanup so captured bodies are not removed while inside the influence field
@@ -30,7 +36,7 @@ The career goal behind the project is practical: build a stable Python / QA foun
 - Start as a vulnerable Big Bang particle.
 - The run opens with a small Big Bang birth animation.
 - Absorb smaller bodies to gain XP and mass.
-- Only larger bodies damage the player and fracture into smaller pieces.
+- Only larger bodies damage the player; small meteorites cannot destroy bodies many times larger than themselves.
 - Captured bodies can orbit temporarily before being absorbed.
 - A small objective panel tracks orbital capture, clean absorption, integrity and stage progress.
 - Advanced stages add stronger gravity and black-hole style visual absorption.
