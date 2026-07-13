@@ -233,11 +233,23 @@ button:hover {
   pointer-events: none;
 }
 
+.game-complete {
+  z-index: 8;
+}
+
 .overlay-title {
   margin-bottom: 0.3rem;
   color: var(--accent);
   font-size: 1.35rem;
   font-weight: 900;
+}
+
+.complete-message {
+  max-width: 42ch;
+  margin: 0 auto;
+  color: #dfeaff;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .run-stats,
@@ -528,6 +540,22 @@ footer {
   .game-frame {
     height: min(72vh, 460px);
     min-height: 400px;
+  }
+
+  .game-overlay {
+    width: min(88%, 390px);
+    max-height: calc(100% - 1.2rem);
+    overflow: auto;
+    padding: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .overlay-title {
+    font-size: 1.05rem;
+  }
+
+  .complete-message {
+    font-size: 0.9rem;
   }
 
   .game-hud,

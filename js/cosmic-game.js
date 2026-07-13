@@ -6,7 +6,7 @@
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const BUILD_VERSION = "2026.07.13f";
+  const BUILD_VERSION = "2026.07.13g";
   const SCORE_KEY = "tg3d-cosmic-evolution-scores";
 
   const ui = {
@@ -42,6 +42,7 @@
     missionIntegrity: document.getElementById("missionIntegrity"),
     missionStage: document.getElementById("missionStage"),
     completeTitle: document.getElementById("completeTitle"),
+    completeMessage: document.getElementById("completeMessage"),
     finalScore: document.getElementById("finalScore"),
     finalMass: document.getElementById("finalMass"),
     finalTime: document.getElementById("finalTime"),
@@ -72,6 +73,7 @@
   ];
 
   const finalXp = 4620;
+  const bigBangDuration = reduceMotion ? 42 : 96;
   const collapseDuration = reduceMotion ? 210 : 390;
   const rebirthDuration = reduceMotion ? 100 : 170;
 
@@ -108,6 +110,7 @@
     keys: new Set(),
     collapseTimer: 0,
     rebirthTimer: 0,
+    bigBangTimer: 0,
     finalSnapshot: null,
     debugVisible: false,
     quality: "high",
@@ -374,6 +377,7 @@
     state.qualityCooldown = 0;
     state.collapseTimer = 0;
     state.rebirthTimer = 0;
+    state.bigBangTimer = 0;
     state.finalSnapshot = null;
     state.soundEvents = [];
     state.impactShake = 0;
@@ -405,12 +409,12 @@
     state.gesture.pointerId = null;
     state.gesture.moved = false;
     for (let i = 0; i < 11; i += 1) spawnBody(true);
-    supernova(state.player.x, state.player.y, reduceMotion ? 32 : 72, true, false);
     updateUi();
     ui.overlay?.classList.remove("hidden");
     ui.complete?.classList.add("hidden");
     canvas.closest(".game-frame")?.classList.remove("is-game-over");
     if (ui.completeTitle) ui.completeTitle.textContent = "Run Complete";
+    if (ui.completeMessage) ui.completeMessage.textContent = "Save your score, then come back and try to build an even cleaner universe.";
     if (ui.saveScore) ui.saveScore.textContent = "Save Score";
     if (ui.finalStage) ui.finalStage.textContent = stages[0].name;
     if (ui.mobilePause) ui.mobilePause.textContent = "Pause";
@@ -429,6 +433,7 @@
       ui.overlay?.classList.add("hidden");
       ui.complete?.classList.add("hidden");
       setStatus("Running");
+      beginBigBang();
     }
     state.paused = false;
     if (ui.mobilePause) ui.mobilePause.textContent = "Pause";
@@ -473,12 +478,12 @@
     const stage = currentStage();
     state.player.radius += (stage.radius - state.player.radius) * 0.24 + 0.22;
     state.player.mass += (stage.mass - state.player.mass) * 0.2 + 0.028;
-    state.player.maxHealth = 100 + state.stageIndex * 8;
-    state.player.health = Math.min(state.player.maxHealth, state.player.health + amount * 0.018 + 0.22);
+    state.player.maxHealth = 100 + state.stageIndex * 6;
+    state.player.health = Math.min(state.player.maxHealth, state.player.health + amount * 0.012 + 0.12);
 
     if (state.stageIndex > previousStage) {
       supernova(x, y, 32 + state.stageIndex * 8, state.stageIndex >= 5, false);
-      state.player.health = Math.min(state.player.maxHealth, state.player.health + 18 + state.stageIndex * 2);
+      state.player.health = Math.min(state.player.maxHealth, state.player.health + 11 + state.stageIndex * 1.4);
       state.player.shield = Math.min(shieldCapacity(), state.player.shield + 10 + state.stageIndex);
       state.player.invulnerable = 1.5;
     }
@@ -539,9 +544,10 @@
     const approachAngle = angle + rand(-0.5, 0.5);
     const tangentAngle = angle + Math.PI / 2;
     const maxRadius = 22 + state.stageIndex * 2.8;
-    const hazardRoll = !initial && Math.random() > (state.width < 640 ? 0.78 : 0.72);
+    const hazardChance = clamp((state.width < 640 ? 0.2 : 0.25) + state.stageIndex * 0.026 + state.elapsed / 1200, 0.18, state.width < 640 ? 0.38 : 0.44);
+    const hazardRoll = !initial && Math.random() < hazardChance;
     const radius = hazardRoll
-      ? rand(Math.max(13, state.player.radius * 0.92), Math.max(maxRadius, state.player.radius * (1.15 + state.stageIndex * 0.025)))
+      ? rand(Math.max(13, state.player.radius * 1.02), Math.max(maxRadius, state.player.radius * (1.18 + state.stageIndex * 0.035)))
       : rand(7, maxRadius);
     const density = rand(0.68, 1.48);
     const value = Math.max(5, Math.round(radius * density * 1.08));
@@ -615,7 +621,7 @@
       fontSize: options.fontSize || 0,
     });
 
-    const limit = qualityLimit(state.width < 640 ? 220 : 390);
+    const limit = qualityLimit(state.width < 640 ? 176 : 390);
     if (state.particles.length > limit) state.particles.splice(0, state.particles.length - limit);
   }
 
@@ -631,6 +637,70 @@
         line: true,
       });
     }
+  }
+
+  function beginBigBang() {
+    const x = state.player.x;
+    const y = state.player.y;
+    state.bigBangTimer = bigBangDuration;
+    state.player.invulnerable = Math.max(state.player.invulnerable, 1.1);
+    recordSoundCue("big-bang-birth", 1);
+    const amount = reduceMotion ? 28 : state.width < 640 ? 68 : 128;
+    for (let i = 0; i < amount; i += 1) {
+      const color = i % 6 === 0 ? "255, 244, 191" : i % 3 === 0 ? "255, 216, 106" : "85, 215, 255";
+      addParticle(x, y, {
+        angle: (Math.PI * 2 * i) / amount + rand(-0.1, 0.1),
+        speed: rand(2.2, state.width < 640 ? 7.4 : 9.6),
+        radius: rand(0.9, state.width < 640 ? 3.2 : 4.4),
+        decay: rand(0.012, 0.024),
+        color,
+        line: true,
+      });
+    }
+    for (let i = 0; i < 4; i += 1) {
+      state.rings.push({
+        x,
+        y,
+        radius: 8 + i * 9,
+        speed: 7.2 + i * 2.1,
+        life: 1,
+        decay: 0.012 + i * 0.003,
+        color: i % 2 ? "85, 215, 255" : "255, 216, 106",
+      });
+    }
+    if (state.rings.length > 10) state.rings.splice(0, state.rings.length - 10);
+  }
+
+  function universeExplosion() {
+    const x = state.player.x;
+    const y = state.player.y;
+    recordSoundCue("universe-finale", 1);
+    state.dangerFlash = Math.max(state.dangerFlash, 0.56);
+    const amount = reduceMotion ? 42 : state.width < 640 ? 86 : 168;
+    for (let i = 0; i < amount; i += 1) {
+      const spiral = i / amount;
+      const color = i % 7 === 0 ? "255, 244, 191" : i % 3 === 0 ? "255, 216, 106" : "85, 215, 255";
+      addParticle(x, y, {
+        angle: spiral * Math.PI * 8 + rand(-0.18, 0.18),
+        speed: rand(3.8, state.width < 640 ? 10.8 : 14.8),
+        radius: rand(1, state.width < 640 ? 4.2 : 5.6),
+        decay: rand(0.007, 0.016),
+        color,
+        line: true,
+      });
+    }
+    for (let i = 0; i < 6; i += 1) {
+      state.rings.push({
+        x,
+        y,
+        radius: 14 + i * 14,
+        speed: 10 + i * 3.6,
+        life: 1,
+        decay: 0.006 + i * 0.002,
+        color: i % 2 ? "255, 216, 106" : "255, 244, 191",
+      });
+    }
+    if (state.rings.length > 12) state.rings.splice(0, state.rings.length - 12);
   }
 
   function absorptionImpact(body, finalForm = false, source = "gravity") {
@@ -765,7 +835,7 @@
   function applyDamage(rawDamage, body, nx, ny, impactForce) {
     if (state.mode !== "play" || state.player.invulnerable > 0) return false;
 
-    const resilience = clamp(1 - state.stageIndex * 0.07, 0.38, 1);
+    const resilience = clamp(1 - state.stageIndex * 0.045, 0.52, 1);
     const shieldBlock = Math.min(state.player.shield, rawDamage * 0.72);
     state.player.shield = Math.max(0, state.player.shield - shieldBlock);
     const damage = Math.max(1, rawDamage * resilience - shieldBlock);
@@ -817,6 +887,7 @@
     recordSoundCue("game-over", 1);
     setStatus("Game Over");
     if (ui.completeTitle) ui.completeTitle.textContent = "Game Over";
+    if (ui.completeMessage) ui.completeMessage.textContent = "This run ended here, but the universe is still waiting. Restart, keep your orbit clean and try to push farther next time.";
     if (ui.finalScore) ui.finalScore.textContent = String(state.finalSnapshot.score);
     if (ui.finalMass) ui.finalMass.textContent = `${state.finalSnapshot.mass.toFixed(1)}x`;
     if (ui.finalTime) ui.finalTime.textContent = formatTime(state.finalSnapshot.time);
@@ -1145,7 +1216,7 @@
 
         const impactForce = clamp(relativeSpeed * 1.6 + body.radius * 0.32 + body.mass * 1.15, 2, 46);
         const damage = (sizeRatio > 1.08 || massRatio > 1.05)
-          ? impactForce * (0.55 + sizeRatio * 0.42 + massRatio * 0.28)
+          ? impactForce * (0.7 + sizeRatio * 0.5 + massRatio * 0.34)
           : impactForce * 0.32;
         const didDamage = applyDamage(damage, body, hitNx, hitNy, impactForce);
         if (body.radius > 8 && (didDamage || sizeRatio > 0.82)) {
@@ -1268,7 +1339,7 @@
     recordSoundCue("universal-rebirth", 1);
     setStatus("Universal Rebirth");
     state.bodies = [];
-    supernova(state.player.x, state.player.y, reduceMotion ? 72 : 180, true, false);
+    universeExplosion();
     state.rings.push({
       x: state.player.x,
       y: state.player.y,
@@ -1282,14 +1353,16 @@
 
   function updateRebirth(dt) {
     state.rebirthTimer += dt;
+    const progress = clamp(state.rebirthTimer / rebirthDuration, 0, 1);
     const centerX = state.player.x;
     const centerY = state.player.y;
-    if (state.frame % 2 === 0) {
-      for (let i = 0; i < 3; i += 1) {
+    if (state.frame % (state.quality === "low" ? 4 : 2) === 0) {
+      const count = state.quality === "low" ? 2 : 3;
+      for (let i = 0; i < count; i += 1) {
         addParticle(centerX, centerY, {
           angle: Math.random() * Math.PI * 2,
-          speed: rand(4, 10),
-          radius: rand(1.2, 4.4),
+          speed: rand(4 + progress * 2, 10 + progress * 8),
+          radius: rand(1.2, state.width < 640 ? 4.2 : 5.2),
           decay: rand(0.008, 0.018),
           color: i % 2 ? "255, 216, 106" : "85, 215, 255",
           line: true,
@@ -1316,8 +1389,9 @@
       endedBy: "Cosmic rebirth",
     };
     recordSoundCue("universal-rebirth-complete", 1);
-    setStatus("Run Complete");
-    if (ui.completeTitle) ui.completeTitle.textContent = "Run Complete";
+    setStatus("Universe Complete");
+    if (ui.completeTitle) ui.completeTitle.textContent = "Universe complete";
+    if (ui.completeMessage) ui.completeMessage.textContent = "Congratulations, you completed the full demo. Save your score if you want to keep this run, then come back and try to build an even cleaner universe.";
     if (ui.finalScore) ui.finalScore.textContent = String(state.finalSnapshot.score);
     if (ui.finalMass) ui.finalMass.textContent = `${state.finalSnapshot.mass.toFixed(1)}x`;
     if (ui.finalTime) ui.finalTime.textContent = formatTime(state.finalSnapshot.time);
@@ -1333,6 +1407,7 @@
     if (state.mode === "play") updatePlay(dt);
     else if (state.mode === "collapse") updateCollapse(dt);
     else if (state.mode === "rebirth") updateRebirth(dt);
+    if (state.bigBangTimer > 0) state.bigBangTimer = Math.max(0, state.bigBangTimer - dt);
     updateUi();
   }
 
@@ -1371,6 +1446,60 @@
       ctx.fillStyle = `rgba(0, 0, 0, ${collapse * 0.42})`;
       ctx.fillRect(0, 0, state.width, state.height);
     }
+  }
+
+  function drawBigBang(time) {
+    if (state.bigBangTimer <= 0) return;
+    const progress = clamp(1 - state.bigBangTimer / bigBangDuration, 0, 1);
+    const alpha = Math.pow(1 - progress, 1.7);
+    const x = state.player.x;
+    const y = state.player.y;
+    const radius = 28 + progress * Math.max(state.width, state.height) * 0.58;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    glow.addColorStop(0, `rgba(255, 244, 191, ${0.5 * alpha})`);
+    glow.addColorStop(0.18, `rgba(255, 216, 106, ${0.28 * alpha})`);
+    glow.addColorStop(0.42, `rgba(85, 215, 255, ${0.2 * alpha})`);
+    glow.addColorStop(1, "rgba(85, 215, 255, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    for (let i = 0; i < 3; i += 1) {
+      ctx.strokeStyle = i % 2 ? `rgba(85, 215, 255, ${0.36 * alpha})` : `rgba(255, 216, 106, ${0.42 * alpha})`;
+      ctx.lineWidth = 1.2 + i * 0.8;
+      ctx.shadowColor = i % 2 ? "#55d7ff" : "#ffd86a";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * (0.28 + i * 0.24), time * 0.001 + i, Math.PI * 1.4 + time * 0.001 + i);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawUniverseFinale() {
+    if (state.mode !== "rebirth") return;
+    const progress = clamp(state.rebirthTimer / rebirthDuration, 0, 1);
+    const alpha = Math.sin(progress * Math.PI);
+    const x = state.player.x;
+    const y = state.player.y;
+    const radius = Math.max(state.width, state.height) * (0.18 + progress * 0.82);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const blast = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    blast.addColorStop(0, `rgba(255, 244, 191, ${0.46 * alpha})`);
+    blast.addColorStop(0.22, `rgba(255, 216, 106, ${0.28 * alpha})`);
+    blast.addColorStop(0.58, `rgba(85, 215, 255, ${0.18 * alpha})`);
+    blast.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = blast;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawOrbitTrails(time) {
@@ -1571,13 +1700,24 @@
   function drawBlackHole(radius, time, stage, binary = false) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < 3; i += 1) {
-      ctx.strokeStyle = i % 2 ? hexToRgba("#f4c867", 0.5) : hexToRgba("#55d7ff", 0.42);
-      ctx.lineWidth = 3 - i * 0.55;
-      ctx.shadowColor = i % 2 ? "#f4c867" : "#55d7ff";
-      ctx.shadowBlur = 22;
+    for (let i = 0; i < 5; i += 1) {
+      const warmth = i / 4;
+      ctx.strokeStyle = warmth < 0.42
+        ? `rgba(255, 244, 191, ${0.5 - i * 0.045})`
+        : `rgba(255, ${Math.round(164 - i * 12)}, 42, ${0.48 - i * 0.045})`;
+      ctx.lineWidth = 4.2 - i * 0.45;
+      ctx.shadowColor = warmth < 0.42 ? "#fff4bf" : "#ff9f2a";
+      ctx.shadowBlur = 22 + i * 2;
       ctx.beginPath();
-      ctx.ellipse(0, 0, radius * (1.58 + i * 0.22), radius * (0.52 + i * 0.07), time * 0.0012 + i * 0.8, 0, Math.PI * 2);
+      ctx.ellipse(
+        0,
+        0,
+        radius * (1.46 + i * 0.24),
+        radius * (0.38 + i * 0.055),
+        time * 0.0012 + i * 0.42,
+        -Math.PI * (0.12 + i * 0.02),
+        Math.PI * (1.72 + i * 0.03),
+      );
       ctx.stroke();
     }
 
@@ -1695,6 +1835,8 @@
 
   function draw(time) {
     drawBackground(time);
+    drawBigBang(time);
+    drawUniverseFinale();
     ctx.save();
     if (state.impactShake > 0 && state.mode === "play") {
       ctx.translate(rand(-state.impactShake, state.impactShake), rand(-state.impactShake, state.impactShake));
@@ -1859,7 +2001,10 @@
   }
 
   function triggerPlayerPulse() {
-    if (!state.running) startGame();
+    if (!state.running) {
+      startGame();
+      return;
+    }
     if (state.running && !state.paused && state.mode === "play") {
       supernova(state.player.x, state.player.y, state.stageIndex >= 5 ? 92 : 54, state.stageIndex >= 5);
     }

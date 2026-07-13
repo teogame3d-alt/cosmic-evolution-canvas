@@ -27,12 +27,13 @@ The career goal behind the project is practical: build a stable Python / QA foun
 ## Gameplay Systems
 
 - Start as a vulnerable Big Bang particle.
+- The run opens with a small Big Bang birth animation.
 - Absorb smaller bodies to gain XP and mass.
 - Only larger bodies damage the player and fracture into smaller pieces.
 - Captured bodies can orbit temporarily before being absorbed.
 - A small objective panel tracks orbital capture, clean absorption, integrity and stage progress.
 - Advanced stages add stronger gravity and black-hole style visual absorption.
-- A complete run enters Cosmic Collapse and Universal Rebirth.
+- A complete run enters Cosmic Collapse, a final universe explosion and Universal Rebirth.
 
 ## Controls
 
@@ -89,6 +90,7 @@ The browser game runs in JavaScript because the portfolio site is static. The `c
 ## Roadmap
 
 - Tune mission objectives and survival targets after more playtesting.
+- Improve realistic black-hole, meteorite and planet rendering.
 - Add optional Web Audio feedback.
 - Add a backend leaderboard.
 - Improve spatial partitioning for larger simulations.
