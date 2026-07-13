@@ -6,7 +6,7 @@
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const BUILD_VERSION = "2026.07.13d";
+  const BUILD_VERSION = "2026.07.13f";
   const SCORE_KEY = "tg3d-cosmic-evolution-scores";
 
   const ui = {
@@ -1890,14 +1890,25 @@
     for (const score of scores) {
       const item = document.createElement("li");
       const stage = score.maxStage || score.stage || "Unknown stage";
-      item.innerHTML = `<span><strong>${score.name}</strong><small>${score.date} · ${stage}</small></span><span>${score.score} pts · ${score.mass.toFixed(1)}x · ${formatTime(score.time)}</span>`;
+      const summary = document.createElement("span");
+      const name = document.createElement("strong");
+      const meta = document.createElement("small");
+      const value = document.createElement("span");
+      name.textContent = score.name || "TeoGame Player";
+      meta.textContent = `${score.date || "Saved run"} · ${stage}`;
+      value.textContent = `${Number(score.score) || 0} pts · ${(Number(score.mass) || 0).toFixed(1)}x · ${formatTime(Number(score.time) || 0)}`;
+      summary.append(name, meta);
+      item.append(summary, value);
       ui.leaderboard.append(item);
     }
   }
 
   function saveCurrentScore() {
     if (!state.finalSnapshot) return;
-    const name = (ui.playerName?.value || "TeoGame Player").trim().slice(0, 18) || "TeoGame Player";
+    const name = (ui.playerName?.value || "TeoGame Player")
+      .replace(/[<>`{}[\]\\]/g, "")
+      .trim()
+      .slice(0, 18) || "TeoGame Player";
     const scores = readScores();
     scores.push({
       name,

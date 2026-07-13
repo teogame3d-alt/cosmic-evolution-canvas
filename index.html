@@ -62,6 +62,16 @@
             <button id="restartUniverse" type="button">Restart Universe</button>
           </div>
         </div>
+        <div class="mobile-game-controls" aria-label="Mobile game controls">
+          <div class="virtual-joystick" id="virtualJoystick" role="application" aria-label="Virtual joystick">
+            <span id="joystickKnob" aria-hidden="true"></span>
+          </div>
+          <div class="mobile-action-row">
+            <button id="mobilePulse" type="button">Pulse</button>
+            <button id="mobilePause" type="button">Pause</button>
+            <button id="mobileRestart" type="button">Restart</button>
+          </div>
+        </div>
       </div>
 
       <div class="game-hud" aria-label="Game statistics">
@@ -82,17 +92,6 @@
         <button id="debugToggle" type="button" aria-expanded="false">Tech Panel</button>
       </div>
 
-      <div class="mobile-game-controls" aria-label="Mobile game controls">
-        <div class="virtual-joystick" id="virtualJoystick" role="application" aria-label="Virtual joystick">
-          <span id="joystickKnob" aria-hidden="true"></span>
-        </div>
-        <div class="mobile-action-row">
-          <button id="mobilePulse" type="button">Pulse</button>
-          <button id="mobilePause" type="button">Pause</button>
-          <button id="mobileRestart" type="button">Restart</button>
-        </div>
-      </div>
-
       <div class="game-debug is-hidden" id="gameDebugPanel" aria-label="Technical game state">
         <span>FPS <strong id="debugFps">0</strong></span>
         <span>Mass <strong id="debugMass">1.0x</strong></span>
@@ -104,7 +103,7 @@
         <span>Quality <strong id="debugQuality">High</strong></span>
         <span>Stage <strong id="debugStage">Big Bang Particle</strong></span>
         <span>XP <strong id="debugXp">0%</strong></span>
-        <span>Build <strong id="debugBuild">2026.07.13d</strong></span>
+        <span>Build <strong id="debugBuild">2026.07.13f</strong></span>
       </div>
 
       <p class="game-help">

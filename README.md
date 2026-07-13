@@ -20,6 +20,7 @@ This project is meant to demonstrate junior-level engineering signals in a visua
 - mobile and desktop input handling
 - localStorage leaderboard
 - debug state that can be inspected from the browser console
+- a small C++ rules prototype for future native/WASM validation experiments
 
 The career goal behind the project is practical: build a stable Python / QA foundation now, while developing a longer-term game-development direction through small, reviewable projects.
 
@@ -75,6 +76,10 @@ window.__tg3dGameDebug()
 
 This returns score, stage, bodies, orbiting objects, maximum orbiting count, captured objects, absorbing objects, health, fragments, quality mode, FPS and other runtime signals.
 
+## C++ Rules Prototype
+
+The browser game runs in JavaScript because the portfolio site is static. The `cpp/cosmic_rules.cpp` file is a small C++17 reference module for collision, absorption and gravity-radius rules. It is included to show how the gameplay rules could later be moved toward a native module, WebAssembly experiment, Unreal prototype or backend score validation service.
+
 ## Portfolio Context
 
 - Live portfolio case study: https://teogame3d-site.pages.dev/programming.html
@@ -87,7 +92,7 @@ This returns score, stage, bodies, orbiting objects, maximum orbiting count, cap
 - Add optional Web Audio feedback.
 - Add a backend leaderboard.
 - Improve spatial partitioning for larger simulations.
-- Build a small C++ / Unreal learning prototype using the same design idea.
+- Expand the C++ rules prototype into a small native / Unreal learning prototype using the same design idea.
 
 ## License
 

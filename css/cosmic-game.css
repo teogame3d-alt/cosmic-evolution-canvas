@@ -327,6 +327,7 @@ button:hover {
   background:
     radial-gradient(circle at 12% 18%, rgba(85, 215, 255, 0.12), transparent 32%),
     rgba(4, 8, 16, 0.62);
+  backdrop-filter: blur(12px);
 }
 
 .virtual-joystick {
@@ -537,18 +538,47 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .game-controls {
+    display: none;
+  }
+
   .mobile-game-controls {
     display: flex;
+    position: absolute;
+    left: 0.65rem;
+    right: 0.65rem;
+    bottom: 0.65rem;
+    z-index: 5;
+    box-shadow:
+      0 14px 38px rgba(0, 0, 0, 0.32),
+      inset 0 0 22px rgba(85, 215, 255, 0.06);
   }
 }
 
 @media (max-width: 430px) {
   .mobile-game-controls {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    gap: 0.45rem;
+    padding: 0.5rem;
   }
 
   .virtual-joystick {
-    align-self: center;
+    width: 76px;
+    align-self: auto;
+  }
+
+  .virtual-joystick span {
+    width: 28px;
+  }
+
+  .mobile-action-row {
+    gap: 0.35rem;
+  }
+
+  .mobile-action-row button {
+    min-height: 42px;
+    padding: 0.48rem 0.45rem;
+    font-size: 0.8rem;
   }
 }
