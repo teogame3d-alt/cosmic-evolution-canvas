@@ -14,6 +14,7 @@ This project is meant to demonstrate junior-level engineering signals in a visua
 - simplified orbital gravity
 - secondary body-to-body gravity for small orbital interactions
 - collision, damage and fragment systems
+- gravity-well hazards, asteroid shrapnel, entropy pressure and edge pressure
 - animated absorption states instead of instant object removal
 - gravity-safe cleanup so captured bodies are not removed while inside the influence field
 - run objectives that expose the technical goals during play
@@ -33,7 +34,9 @@ The career goal behind the project is practical: build a stable Python / QA foun
 - Captured bodies can orbit temporarily before being absorbed.
 - A small objective panel tracks orbital capture, clean absorption, integrity and stage progress.
 - Advanced stages add stronger gravity and black-hole style visual absorption.
-- A complete run enters Cosmic Collapse, a final universe explosion and Universal Rebirth.
+- Larger hazardous bodies can pull the player and sling smaller asteroids through their own gravity wells.
+- Asteroid-to-asteroid impacts can create shrapnel, making the field more dangerous without artificial warning circles.
+- A complete run enters Cosmic Collapse, compresses into a tiny final singularity, then triggers a universe explosion and Universal Rebirth.
 
 ## Controls
 

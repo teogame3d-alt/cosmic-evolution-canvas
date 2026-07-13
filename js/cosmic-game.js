@@ -6,7 +6,7 @@
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const BUILD_VERSION = "2026.07.13g";
+  const BUILD_VERSION = "2026.07.13h";
   const SCORE_KEY = "tg3d-cosmic-evolution-scores";
 
   const ui = {
@@ -75,6 +75,7 @@
   const finalXp = 4620;
   const bigBangDuration = reduceMotion ? 42 : 96;
   const collapseDuration = reduceMotion ? 210 : 390;
+  const singularityDuration = reduceMotion ? 70 : 130;
   const rebirthDuration = reduceMotion ? 100 : 170;
 
   const state = {
@@ -109,8 +110,14 @@
     rings: [],
     keys: new Set(),
     collapseTimer: 0,
+    singularityTimer: 0,
     rebirthTimer: 0,
     bigBangTimer: 0,
+    lastAbsorbAt: 0,
+    entropyWarningAt: -99,
+    edgeWarningAt: -99,
+    hazardWarningAt: -99,
+    shrapnelWarningAt: -99,
     finalSnapshot: null,
     debugVisible: false,
     quality: "high",
@@ -290,6 +297,58 @@
     state.player.health = Math.min(state.player.maxHealth, state.player.health + amount);
   }
 
+  function applyStressDamage(amount, label, color = "255, 108, 108") {
+    if (state.mode !== "play" || state.player.invulnerable > 0) return false;
+    const damage = Math.max(1, amount);
+    state.player.health = Math.max(0, state.player.health - damage);
+    state.damageTaken += damage;
+    state.player.invulnerable = 0.42;
+    state.dangerFlash = Math.max(state.dangerFlash, clamp(damage / 34, 0.16, 0.54));
+    state.impactShake = Math.max(state.impactShake, clamp(damage / 7, 1.6, 6.2));
+    addParticle(state.player.x, state.player.y - state.player.radius - 8, {
+      label,
+      fontSize: state.width < 640 ? 11 : 13,
+      speed: 1,
+      angle: -Math.PI / 2 + rand(-0.28, 0.28),
+      radius: 0.1,
+      decay: 0.022,
+      color,
+      line: false,
+    });
+    burst(state.player.x, state.player.y, 8 + Math.round(damage * 0.3), color);
+    triggerFrameImpact(state.player.health <= 0);
+    if (state.player.health <= 0) gameOver(label === "ENTROPY" ? "Entropy consumed the core" : "Cosmic integrity lost");
+    return true;
+  }
+
+  function applyEdgePressure(dt) {
+    if (state.mode !== "play") return;
+    const margin = Math.max(22, state.player.radius * 1.25);
+    const edgeDistance = Math.min(state.player.x, state.width - state.player.x, state.player.y, state.height - state.player.y);
+    if (edgeDistance > margin) return;
+    const pressure = clamp((margin - edgeDistance) / margin, 0, 1);
+    state.player.vx += (state.player.x < margin ? 0.09 : state.player.x > state.width - margin ? -0.09 : 0) * dt;
+    state.player.vy += (state.player.y < margin ? 0.09 : state.player.y > state.height - margin ? -0.09 : 0) * dt;
+    if (state.elapsed - state.edgeWarningAt > 1.1) {
+      state.edgeWarningAt = state.elapsed;
+      applyStressDamage(2.4 + pressure * (3.4 + state.stageIndex * 0.28), "DEEP SPACE", "255, 216, 106");
+    }
+  }
+
+  function applyEntropyPressure(dt) {
+    if (state.mode !== "play" || state.elapsed < 18 || state.stageIndex < 1) return;
+    const idleTime = state.elapsed - state.lastAbsorbAt;
+    if (idleTime < 22) return;
+    const pressure = clamp((idleTime - 22) / 38, 0, 1);
+    const drain = (0.002 + pressure * (0.008 + state.stageIndex * 0.0018)) * dt;
+    state.player.health = Math.max(0, state.player.health - drain);
+    if (pressure > 0.35 && state.elapsed - state.entropyWarningAt > 3.2) {
+      state.entropyWarningAt = state.elapsed;
+      applyStressDamage(1.8 + pressure * 3.2, "ENTROPY", "255, 108, 108");
+    }
+    if (state.player.health <= 0) gameOver("Entropy consumed the core");
+  }
+
   function trimBodies(limit) {
     while (state.bodies.length > limit) {
       let removeIndex = -1;
@@ -376,8 +435,14 @@
     state.fpsFrames = 0;
     state.qualityCooldown = 0;
     state.collapseTimer = 0;
+    state.singularityTimer = 0;
     state.rebirthTimer = 0;
     state.bigBangTimer = 0;
+    state.lastAbsorbAt = 0;
+    state.entropyWarningAt = -99;
+    state.edgeWarningAt = -99;
+    state.hazardWarningAt = -99;
+    state.shrapnelWarningAt = -99;
     state.finalSnapshot = null;
     state.soundEvents = [];
     state.impactShake = 0;
@@ -430,6 +495,7 @@
       state.running = true;
       state.mode = "play";
       state.runStartedAt = performance.now();
+      state.lastAbsorbAt = 0;
       ui.overlay?.classList.add("hidden");
       ui.complete?.classList.add("hidden");
       setStatus("Running");
@@ -454,6 +520,7 @@
 
   function modeLabel() {
     if (state.mode === "collapse") return "Cosmic Collapse";
+    if (state.mode === "singularity") return "Final Singularity";
     if (state.mode === "rebirth") return "Universal Rebirth";
     if (state.mode === "complete") return "Run Complete";
     return "Running";
@@ -522,7 +589,11 @@
     if (ui.debugHealth) ui.debugHealth.textContent = `${Math.round(state.player.health)}/${Math.round(state.player.maxHealth)}`;
     if (ui.debugShield) ui.debugShield.textContent = String(Math.round(state.player.shield));
     if (ui.debugQuality) ui.debugQuality.textContent = state.quality[0].toUpperCase() + state.quality.slice(1);
-    if (ui.debugStage) ui.debugStage.textContent = state.mode === "rebirth" ? "Universal Rebirth" : stage.name;
+    if (ui.debugStage) ui.debugStage.textContent = state.mode === "rebirth"
+      ? "Universal Rebirth"
+      : state.mode === "singularity"
+        ? "Final Singularity"
+        : stage.name;
     if (ui.debugXp) ui.debugXp.textContent = `${Math.round(progress)}%`;
     if (ui.debugBuild) ui.debugBuild.textContent = BUILD_VERSION;
     if (ui.missionOrbit) ui.missionOrbit.textContent = `${Math.min(state.maxOrbiting, 5)}/5`;
@@ -531,7 +602,7 @@
     if (ui.missionStage) ui.missionStage.textContent = stage.name;
   }
 
-  function spawnBody(initial = false) {
+  function spawnBody(initial = false, forcedHazard = false) {
     const side = Math.floor(Math.random() * 4);
     const margin = initial ? 0 : 70;
     const x = side === 0 ? -margin : side === 1 ? state.width + margin : rand(0, state.width);
@@ -545,7 +616,7 @@
     const tangentAngle = angle + Math.PI / 2;
     const maxRadius = 22 + state.stageIndex * 2.8;
     const hazardChance = clamp((state.width < 640 ? 0.2 : 0.25) + state.stageIndex * 0.026 + state.elapsed / 1200, 0.18, state.width < 640 ? 0.38 : 0.44);
-    const hazardRoll = !initial && Math.random() < hazardChance;
+    const hazardRoll = !initial && (forcedHazard || Math.random() < hazardChance);
     const radius = hazardRoll
       ? rand(Math.max(13, state.player.radius * 1.02), Math.max(maxRadius, state.player.radius * (1.18 + state.stageIndex * 0.035)))
       : rand(7, maxRadius);
@@ -570,8 +641,8 @@
     const body = {
       x: seededOrbit ? clamp(anchorX + Math.cos(seedAngle) * seedDistance, 24, state.width - 24) : initial ? rand(20, state.width - 20) : x,
       y: seededOrbit ? clamp(anchorY + Math.sin(seedAngle) * seedDistance, 24, state.height - 24) : initial ? rand(20, state.height - 20) : y,
-      vx: seededOrbit ? -Math.sin(seedAngle) * seedDir * rand(0.55, 1.15) : Math.cos(approachAngle) * rand(0.28, 1.05) + Math.cos(tangentAngle) * rand(-0.72, 0.72),
-      vy: seededOrbit ? Math.cos(seedAngle) * seedDir * rand(0.55, 1.15) : Math.sin(approachAngle) * rand(0.28, 1.05) + Math.sin(tangentAngle) * rand(-0.72, 0.72),
+      vx: seededOrbit ? -Math.sin(seedAngle) * seedDir * rand(0.55, 1.15) : Math.cos(approachAngle) * rand(hazardRoll ? 0.62 : 0.28, hazardRoll ? 1.46 : 1.05) + Math.cos(tangentAngle) * rand(-0.72, 0.72),
+      vy: seededOrbit ? Math.cos(seedAngle) * seedDir * rand(0.55, 1.15) : Math.sin(approachAngle) * rand(hazardRoll ? 0.62 : 0.28, hazardRoll ? 1.46 : 1.05) + Math.sin(tangentAngle) * rand(-0.72, 0.72),
       radius,
       mass: Math.max(0.28, (radius / 14) * density),
       value,
@@ -597,6 +668,10 @@
       absorbAlpha: 1,
       fragment: false,
       dangerous: hazardRoll,
+      gravityWell: hazardRoll && (radius > state.player.radius * 0.96 || state.stageIndex >= 3),
+      unstable: hazardRoll && Math.random() > (state.width < 640 ? 0.56 : 0.48),
+      collisionCooldown: 0,
+      sharpFragment: false,
     };
 
     state.bodies.push(body);
@@ -814,7 +889,11 @@
         absorbStartRadius: radius,
         absorbAlpha: 1,
         fragment: true,
-        dangerous: false,
+        dangerous: impactForce > 14 && Math.random() > 0.62,
+        gravityWell: false,
+        unstable: false,
+        collisionCooldown: 16,
+        sharpFragment: impactForce > 10 && Math.random() > 0.35,
       });
     }
 
@@ -991,22 +1070,149 @@
 
         const larger = first.mass >= second.mass ? first : second;
         const smaller = larger === first ? second : first;
-        if (larger.mass < smaller.mass * 1.18) continue;
+        const gravityWell = larger.gravityWell || larger.dangerous;
+        if (larger.mass < smaller.mass * (gravityWell ? 1.02 : 1.18)) continue;
 
         const dx = larger.x - smaller.x;
         const dy = larger.y - smaller.y;
         const dist = Math.max(12, Math.hypot(dx, dy));
-        const influence = Math.max(74, larger.radius * 6.4 + smaller.radius * 2.2);
+        const influence = Math.max(74, larger.radius * (gravityWell ? 8.8 : 6.4) + smaller.radius * 2.2);
         if (dist > influence) continue;
 
         const nx = dx / dist;
         const ny = dy / dist;
         const orbitalBand = clamp((influence - dist) / influence, 0, 1);
-        const pull = clamp((larger.mass * orbitalBand) / (dist * 0.72), 0, 0.018);
-        const tangent = orbitalBand * 0.008 * (smaller.orbitDir || 1);
+        const pull = clamp((larger.mass * orbitalBand) / (dist * (gravityWell ? 0.52 : 0.72)), 0, gravityWell ? 0.032 : 0.018);
+        const tangent = orbitalBand * (gravityWell ? 0.014 : 0.008) * (smaller.orbitDir || 1);
         smaller.vx += (nx * pull + -ny * tangent) * dt;
         smaller.vy += (ny * pull + nx * tangent) * dt;
       }
+    }
+  }
+
+  function applyHostileGravity(dt) {
+    if (state.mode !== "play") return;
+    const player = state.player;
+    const maxChecks = Math.min(state.bodies.length, state.quality === "low" ? 18 : 28);
+    for (let i = 0; i < maxChecks; i += 1) {
+      const body = state.bodies[i];
+      if (!body || body.absorbing || body.fragment || !body.gravityWell) continue;
+      if (body.radius < player.radius * 0.82 && body.mass < player.mass * 0.92) continue;
+
+      const dx = body.x - player.x;
+      const dy = body.y - player.y;
+      const dist = Math.max(18, Math.hypot(dx, dy));
+      const influence = Math.max(96, body.radius * 7.4 + body.mass * 28);
+      if (dist > influence) continue;
+
+      const band = clamp((influence - dist) / influence, 0, 1);
+      const massRatio = clamp(body.mass / Math.max(player.mass, 0.6), 0.55, 3.4);
+      const pull = band * band * massRatio * (0.034 + state.stageIndex * 0.0025);
+      const nx = dx / dist;
+      const ny = dy / dist;
+      player.vx += nx * pull * dt;
+      player.vy += ny * pull * dt;
+
+      if (band > 0.48 && state.elapsed - state.hazardWarningAt > 2.2) {
+        state.hazardWarningAt = state.elapsed;
+        addParticle(player.x, player.y - player.radius - 10, {
+          label: "GRAVITY WELL",
+          fontSize: state.width < 640 ? 10 : 12,
+          speed: 0.8,
+          angle: -Math.PI / 2,
+          radius: 0.1,
+          decay: 0.024,
+          color: "255, 216, 106",
+          line: false,
+        });
+      }
+    }
+  }
+
+  function updateBodyCollisions(dt) {
+    if (state.bodies.length < 2) return;
+    const bodies = state.bodies.slice(0, state.quality === "low" ? 22 : 34);
+    const remove = new Set();
+
+    for (let i = 0; i < bodies.length; i += 1) {
+      const first = bodies[i];
+      if (!first || first.absorbing || remove.has(first)) continue;
+      first.collisionCooldown = Math.max(0, (first.collisionCooldown || 0) - dt);
+      for (let j = i + 1; j < bodies.length; j += 1) {
+        const second = bodies[j];
+        if (!second || second.absorbing || remove.has(second)) continue;
+        second.collisionCooldown = Math.max(0, (second.collisionCooldown || 0) - dt);
+        if ((first.collisionCooldown || 0) > 0 || (second.collisionCooldown || 0) > 0) continue;
+
+        const dx = second.x - first.x;
+        const dy = second.y - first.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        const contact = (first.radius + second.radius) * 0.68;
+        if (dist > contact) continue;
+
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const relativeVx = second.vx - first.vx;
+        const relativeVy = second.vy - first.vy;
+        const impactSpeed = Math.hypot(relativeVx, relativeVy);
+        const unstableHit = first.unstable || second.unstable || first.gravityWell || second.gravityWell;
+        const explosiveHit = impactSpeed > (state.width < 640 ? 2.55 : 2.25) || unstableHit;
+
+        first.vx -= nx * (0.6 + impactSpeed * 0.18);
+        first.vy -= ny * (0.6 + impactSpeed * 0.18);
+        second.vx += nx * (0.6 + impactSpeed * 0.18);
+        second.vy += ny * (0.6 + impactSpeed * 0.18);
+        first.collisionCooldown = 18;
+        second.collisionCooldown = 18;
+
+        if (explosiveHit) {
+          explodeAsteroidCollision(first, second, nx, ny, impactSpeed, remove);
+          break;
+        }
+      }
+    }
+
+    if (remove.size > 0) {
+      state.bodies = state.bodies.filter((body) => !remove.has(body));
+      trimBodies(qualityLimit(state.width < 640 ? 30 : 46));
+    }
+  }
+
+  function explodeAsteroidCollision(first, second, nx, ny, impactSpeed, remove) {
+    const totalMass = Math.max(0.1, first.mass + second.mass);
+    const x = (first.x * first.mass + second.x * second.mass) / totalMass;
+    const y = (first.y * first.mass + second.y * second.mass) / totalMass;
+    const impactForce = clamp(impactSpeed * 8 + (first.radius + second.radius) * 0.2, 5, 34);
+    const hotCollision = first.unstable || second.unstable || impactSpeed > 3.1;
+    const count = Math.round((hotCollision ? 16 : 10) + impactForce * 0.36);
+
+    burst(x, y, count, hotCollision ? "255, 216, 106" : "85, 215, 255");
+    state.rings.push({
+      x,
+      y,
+      radius: Math.max(10, (first.radius + second.radius) * 0.38),
+      speed: 4.8 + impactForce * 0.16,
+      life: 0.82,
+      decay: 0.038,
+      color: hotCollision ? "255, 216, 106" : "85, 215, 255",
+    });
+    if (state.rings.length > 10) state.rings.splice(0, state.rings.length - 10);
+
+    if (first.radius > 7) fractureBody(first, -nx, -ny, impactForce);
+    if (second.radius > 7) fractureBody(second, nx, ny, impactForce);
+    remove.add(first);
+    remove.add(second);
+
+    const playerDistance = Math.hypot(state.player.x - x, state.player.y - y);
+    const blastRadius = Math.max(58, (first.radius + second.radius) * (hotCollision ? 2.6 : 2.0));
+    if (playerDistance < blastRadius && state.elapsed - state.shrapnelWarningAt > 0.65) {
+      state.shrapnelWarningAt = state.elapsed;
+      const pressure = clamp((blastRadius - playerDistance) / blastRadius, 0, 1);
+      const damage = pressure * (5 + impactForce * 0.42 + state.stageIndex * 0.35);
+      applyStressDamage(damage, "SHRAPNEL", hotCollision ? "255, 108, 108" : "255, 216, 106");
+      const pushAngle = Math.atan2(state.player.y - y, state.player.x - x);
+      state.player.vx += Math.cos(pushAngle) * pressure * 3.2;
+      state.player.vy += Math.sin(pushAngle) * pressure * 3.2;
     }
   }
 
@@ -1062,6 +1268,7 @@
           const gained = body.absorbValue || body.value;
           state.bodies.splice(i, 1);
           state.absorbed += 1;
+          state.lastAbsorbAt = state.elapsed;
           addXp(gained, body.x, body.y);
           healPlayer(Math.max(0.4, gained * 0.025));
           addParticle(body.x, body.y - body.radius - 10, {
@@ -1148,6 +1355,16 @@
           body.vx = (body.vx / speed) * maxSpeed;
           body.vy = (body.vy / speed) * maxSpeed;
         }
+
+        if (
+          !blackHoleLike &&
+          !body.fragment &&
+          body.radius > player.radius * 1.12 &&
+          rawDist < player.radius * 3.2 + body.radius * 1.35 &&
+          Math.abs(radialVelocity) > 0.65
+        ) {
+          applyStressDamage(1.4 + capture * (3.8 + state.stageIndex * 0.28), "TIDAL STRESS", "255, 108, 108");
+        }
       } else {
         body.orbiting = false;
         body.captured = false;
@@ -1185,8 +1402,9 @@
         const relativeSpeed = Math.hypot(player.vx - body.vx, player.vy - body.vy);
         const sizeRatio = body.radius / Math.max(player.radius, 1);
         const massRatio = body.mass / Math.max(player.mass, 0.35);
-        const canAbsorb = blackHoleLike || body.fragment || body.radius <= player.radius * 0.98;
-        const canDamage = !blackHoleLike && !canAbsorb && body.radius > player.radius * 1.02;
+        const sharpFragment = body.sharpFragment && relativeSpeed > 2.15 && body.radius > player.radius * 0.42;
+        const canAbsorb = blackHoleLike || (!sharpFragment && body.fragment) || body.radius <= player.radius * (sharpFragment ? 0.5 : 0.98);
+        const canDamage = !blackHoleLike && !canAbsorb && (body.radius > player.radius * 1.02 || sharpFragment);
         const holdOrbit = !blackHoleLike &&
           orbitalStage &&
           body.captured &&
@@ -1215,7 +1433,9 @@
         }
 
         const impactForce = clamp(relativeSpeed * 1.6 + body.radius * 0.32 + body.mass * 1.15, 2, 46);
-        const damage = (sizeRatio > 1.08 || massRatio > 1.05)
+        const damage = sharpFragment
+          ? impactForce * (0.46 + relativeSpeed * 0.12)
+          : (sizeRatio > 1.08 || massRatio > 1.05)
           ? impactForce * (0.7 + sizeRatio * 0.5 + massRatio * 0.34)
           : impactForce * 0.32;
         const didDamage = applyDamage(damage, body, hitNx, hitNy, impactForce);
@@ -1234,12 +1454,13 @@
   function updateParticles(dt) {
     for (let i = state.particles.length - 1; i >= 0; i -= 1) {
       const p = state.particles[i];
-      if (state.mode === "collapse") {
+      if (state.mode === "collapse" || state.mode === "singularity") {
         const dx = state.player.x - p.x;
         const dy = state.player.y - p.y;
         const dist = Math.max(12, Math.hypot(dx, dy));
-        p.vx += (dx / dist) * 0.05 * dt;
-        p.vy += (dy / dist) * 0.05 * dt;
+        const pull = state.mode === "singularity" ? 0.16 : 0.05;
+        p.vx += (dx / dist) * pull * dt;
+        p.vy += (dy / dist) * pull * dt;
       }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -1259,16 +1480,21 @@
 
   function updatePlay(dt) {
     state.spawnTimer += dt;
-    const spawnEvery = Math.max(12, 38 - state.stageIndex * 2.4);
+    const spawnEvery = Math.max(8, 36 - state.stageIndex * 2.7 - Math.min(6, state.elapsed / 55));
     if (state.spawnTimer > spawnEvery) {
       spawnBody();
+      if (state.stageIndex >= 2 && Math.random() < 0.18 + state.stageIndex * 0.025) spawnBody(false, true);
       if (state.stageIndex >= 5 && Math.random() > 0.45) spawnBody();
       state.spawnTimer = 0;
     }
 
     updatePlayer(dt);
+    applyHostileGravity(dt);
+    applyEdgePressure(dt);
     updateSecondaryGravity(dt);
+    updateBodyCollisions(dt);
     updateBodies(dt);
+    applyEntropyPressure(dt);
     const bodyLimit = qualityLimit(state.width < 640 ? 28 : 44);
     trimBodies(bodyLimit);
     updateParticles(dt);
@@ -1329,6 +1555,67 @@
     updateParticles(dt);
 
     if (state.collapseTimer >= collapseDuration || (state.bodies.length === 0 && state.collapseTimer > collapseDuration * 0.38)) {
+      beginSingularity();
+    }
+  }
+
+  function beginSingularity() {
+    state.mode = "singularity";
+    state.singularityTimer = 0;
+    state.bodies = [];
+    state.player.vx = 0;
+    state.player.vy = 0;
+    state.player.invulnerable = 999;
+    recordSoundCue("final-singularity", 1);
+    setStatus("Final Singularity");
+
+    const amount = reduceMotion ? 24 : state.width < 640 ? 44 : 76;
+    const maxDistance = Math.max(state.width, state.height) * 0.74;
+    for (let i = 0; i < amount; i += 1) {
+      const angle = (Math.PI * 2 * i) / amount + rand(-0.08, 0.08);
+      const distance = rand(Math.min(state.width, state.height) * 0.24, maxDistance);
+      addParticle(state.player.x + Math.cos(angle) * distance, state.player.y + Math.sin(angle) * distance, {
+        angle: angle + Math.PI + rand(-0.18, 0.18),
+        speed: rand(3.2, state.width < 640 ? 8.2 : 11.2),
+        radius: rand(0.9, state.width < 640 ? 3.1 : 4.4),
+        decay: rand(0.008, 0.017),
+        color: i % 3 === 0 ? "255, 216, 106" : "85, 215, 255",
+        line: true,
+      });
+    }
+  }
+
+  function updateSingularity(dt) {
+    state.singularityTimer += dt;
+    const progress = clamp(state.singularityTimer / singularityDuration, 0, 1);
+    setStatus("Final Singularity");
+
+    const finalRadius = 3.2;
+    state.player.radius = Math.max(finalRadius, stages[stages.length - 1].radius * (1 - progress * 0.965));
+    state.player.mass = Math.max(stages[stages.length - 1].mass, state.player.mass + progress * 0.02);
+    state.player.angle += (0.03 + progress * 0.08) * dt;
+    state.player.vx *= Math.pow(0.86, dt);
+    state.player.vy *= Math.pow(0.86, dt);
+
+    if (state.frame % (state.quality === "low" ? 5 : 3) === 0) {
+      const amount = state.quality === "low" ? 2 : 4;
+      for (let i = 0; i < amount; i += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = rand(state.player.radius * 4, Math.max(state.width, state.height) * 0.56);
+        addParticle(state.player.x + Math.cos(angle) * distance, state.player.y + Math.sin(angle) * distance, {
+          angle: angle + Math.PI + rand(-0.16, 0.16),
+          speed: rand(3.4 + progress * 2.4, state.width < 640 ? 9.2 : 12.8),
+          radius: rand(0.8, state.width < 640 ? 3.1 : 4.6),
+          decay: rand(0.007, 0.015),
+          color: i % 2 ? "255, 216, 106" : "85, 215, 255",
+          line: true,
+        });
+      }
+    }
+
+    updateParticles(dt);
+    if (state.singularityTimer >= singularityDuration) {
+      state.player.radius = finalRadius;
       beginRebirth();
     }
   }
@@ -1406,13 +1693,19 @@
     state.elapsed = (performance.now() - state.runStartedAt) / 1000;
     if (state.mode === "play") updatePlay(dt);
     else if (state.mode === "collapse") updateCollapse(dt);
+    else if (state.mode === "singularity") updateSingularity(dt);
     else if (state.mode === "rebirth") updateRebirth(dt);
     if (state.bigBangTimer > 0) state.bigBangTimer = Math.max(0, state.bigBangTimer - dt);
     updateUi();
   }
 
   function drawBackground(time) {
-    const collapse = state.mode === "collapse" ? clamp(state.collapseTimer / collapseDuration, 0, 1) : 0;
+    const singularity = state.mode === "singularity" ? clamp(state.singularityTimer / singularityDuration, 0, 1) : 0;
+    const collapse = state.mode === "collapse"
+      ? clamp(state.collapseTimer / collapseDuration, 0, 1)
+      : state.mode === "singularity"
+        ? 1
+        : 0;
     const gradient = ctx.createRadialGradient(state.width * 0.5, state.height * 0.5, 0, state.width * 0.5, state.height * 0.5, state.width);
     gradient.addColorStop(0, collapse ? "#07101a" : "#0d1726");
     gradient.addColorStop(0.5, collapse ? "#030611" : "#07101d");
@@ -1422,12 +1715,12 @@
 
     for (const star of state.stars) {
       const pulse = Math.sin(time * 0.0014 * star.z + star.twinkle) * 0.34 + 0.66;
-      if (state.mode === "collapse") {
+      if (collapse > 0) {
         const dx = state.player.x - star.x;
         const dy = state.player.y - star.y;
         const dist = Math.max(20, Math.hypot(dx, dy));
-        star.x += (dx / dist) * (0.08 + collapse * 0.7) * star.z;
-        star.y += (dy / dist) * (0.08 + collapse * 0.7) * star.z;
+        star.x += (dx / dist) * (0.08 + collapse * 0.7 + singularity * 1.2) * star.z;
+        star.y += (dy / dist) * (0.08 + collapse * 0.7 + singularity * 1.2) * star.z;
         if (dist < state.player.radius) {
           star.x = Math.random() * state.width;
           star.y = Math.random() * state.height;
@@ -1498,6 +1791,55 @@
     ctx.fillStyle = blast;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFinalSingularity() {
+    if (state.mode !== "singularity") return;
+    const progress = clamp(state.singularityTimer / singularityDuration, 0, 1);
+    const x = state.player.x;
+    const y = state.player.y;
+    const reach = Math.max(state.width, state.height) * (0.28 - progress * 0.2);
+    const core = Math.max(5, state.player.radius * (1.2 - progress * 0.35));
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const lens = ctx.createRadialGradient(x, y, core * 0.2, x, y, Math.max(24, reach));
+    lens.addColorStop(0, `rgba(255, 244, 191, ${0.34 + progress * 0.22})`);
+    lens.addColorStop(0.18, `rgba(255, 160, 42, ${0.2 + progress * 0.22})`);
+    lens.addColorStop(0.44, `rgba(85, 215, 255, ${0.12 * (1 - progress * 0.4)})`);
+    lens.addColorStop(1, "rgba(85, 215, 255, 0)");
+    ctx.fillStyle = lens;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(26, reach), 0, Math.PI * 2);
+    ctx.fill();
+
+    for (let i = 0; i < 3; i += 1) {
+      const alpha = 0.52 - i * 0.12 + progress * 0.1;
+      ctx.strokeStyle = i % 2 ? `rgba(85, 215, 255, ${alpha})` : `rgba(255, 216, 106, ${alpha})`;
+      ctx.shadowColor = i % 2 ? "#55d7ff" : "#ffd86a";
+      ctx.shadowBlur = 18 + i * 4;
+      ctx.lineWidth = 2.8 - i * 0.55;
+      ctx.beginPath();
+      ctx.ellipse(
+        x,
+        y,
+        Math.max(core * 2.2, reach * (0.22 + i * 0.1)),
+        Math.max(core * 0.7, reach * (0.065 + i * 0.03)),
+        progress * 3.8 + i * 0.76,
+        -Math.PI * 0.12,
+        Math.PI * 1.84,
+      );
+      ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.92)";
+    ctx.shadowColor = "#fff4bf";
+    ctx.shadowBlur = 20 + progress * 26;
+    ctx.beginPath();
+    ctx.arc(x, y, core, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -1620,6 +1962,24 @@
     if (body.absorbing) {
       const wobble = 1 + Math.sin(body.absorbTimer * 0.24) * 0.06;
       ctx.scale(wobble, 1 / wobble);
+    }
+    if (body.gravityWell && !body.absorbing) {
+      const auraRadius = body.radius * (2.05 + Math.sin(time * 0.004 + body.surfacePhase) * 0.16);
+      const aura = ctx.createRadialGradient(0, 0, body.radius * 0.35, 0, 0, auraRadius);
+      aura.addColorStop(0, "rgba(255, 216, 106, 0.16)");
+      aura.addColorStop(0.52, "rgba(85, 215, 255, 0.055)");
+      aura.addColorStop(1, "rgba(85, 215, 255, 0)");
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 216, 106, 0.24)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, body.radius * 1.82, body.radius * 0.58, time * 0.0016 + body.surfacePhase, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
     }
     ctx.fillStyle = body.color;
     ctx.shadowColor = body.color;
@@ -1837,6 +2197,7 @@
     drawBackground(time);
     drawBigBang(time);
     drawUniverseFinale();
+    drawFinalSingularity();
     ctx.save();
     if (state.impactShake > 0 && state.mode === "play") {
       ctx.translate(rand(-state.impactShake, state.impactShake), rand(-state.impactShake, state.impactShake));
