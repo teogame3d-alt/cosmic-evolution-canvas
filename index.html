@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cosmic Evolution | HTML5 Canvas Gravity Game</title>
+  <meta name="description" content="Cosmic Evolution is an original HTML5 Canvas gravity game demo with orbital capture, animated absorption states, damage, fragments, progression and mobile controls." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23050714'/%3E%3Ccircle cx='32' cy='32' r='12' fill='%23ffd86a'/%3E%3Cpath d='M8 34c13-12 34-14 48-4' fill='none' stroke='%2355d7ff' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./css/cosmic-game.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero">
+      <p class="eyebrow">HTML5 CANVAS GAME CASE STUDY</p>
+      <h1>Cosmic Evolution</h1>
+      <p>
+        A browser-based gravity game built to demonstrate JavaScript game-loop structure,
+        Canvas rendering, collision logic, procedural bodies, orbit capture, damage feedback,
+        local scoring and mobile input handling.
+      </p>
+      <div class="hero-links">
+        <a href="#game-title">Play demo</a>
+        <a href="https://github.com/teogame3d-alt/cosmic-evolution-canvas" target="_blank" rel="noopener noreferrer">Source code</a>
+        <a href="https://teogame3d-site.pages.dev/programming.html" target="_blank" rel="noopener noreferrer">Portfolio case study</a>
+        <a href="https://github.com/teogame3d-alt" target="_blank" rel="noopener noreferrer">GitHub profile</a>
+      </div>
+    </section>
+
+    <section class="game-shell" aria-labelledby="game-title">
+      <div class="game-topline">
+        <div>
+          <p class="eyebrow">PLAYABLE PROTOTYPE</p>
+          <h2 id="game-title">Cosmic Evolution</h2>
+        </div>
+        <div class="game-status" aria-live="polite">
+          <span id="gameStateLabel">Ready</span>
+          <strong id="stageLabel">Big Bang Particle</strong>
+        </div>
+      </div>
+
+      <div class="game-frame">
+        <canvas id="cosmicGameCanvas" aria-label="Cosmic Evolution playable canvas game"></canvas>
+        <div class="game-overlay" id="gameOverlay">
+          <p class="overlay-title">Start the evolution</p>
+          <p>Absorb smaller bodies, avoid larger hazards, capture orbiting matter and survive until the universe collapses.</p>
+        </div>
+        <div class="game-overlay game-complete hidden" id="gameComplete" aria-live="polite">
+          <p class="overlay-title" id="completeTitle">Run Complete</p>
+          <div class="run-stats" aria-label="Final run statistics">
+            <span>Score <strong id="finalScore">0</strong></span>
+            <span>Mass <strong id="finalMass">1.0x</strong></span>
+            <span>Time <strong id="finalTime">0:00</strong></span>
+            <span>Absorbed <strong id="finalAbsorbed">0</strong></span>
+            <span>Max stage <strong id="finalStage">Big Bang Particle</strong></span>
+          </div>
+          <label class="player-name">
+            Player name
+            <input id="playerName" type="text" maxlength="18" autocomplete="off" placeholder="Your name" />
+          </label>
+          <div class="complete-actions">
+            <button id="saveScore" type="button">Save Score</button>
+            <button id="restartUniverse" type="button">Restart Universe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-hud" aria-label="Game statistics">
+        <div><span>Score</span><strong id="scoreValue">0</strong></div>
+        <div><span>XP</span><strong id="xpValue">0</strong></div>
+        <div><span>Level</span><strong id="levelValue">1</strong></div>
+        <div><span>Mass</span><strong id="massValue">1.0x</strong></div>
+        <div class="integrity-stat"><span>Integrity</span><strong id="healthValue">100%</strong></div>
+      </div>
+
+      <div class="xp-track" aria-label="Experience progress"><span id="xpBar"></span></div>
+      <div class="health-track" aria-label="Cosmic integrity"><span id="healthBar"></span></div>
+
+      <div class="game-controls">
+        <button id="startGame" type="button">Start Game</button>
+        <button id="pauseGame" type="button">Pause</button>
+        <button id="restartGame" type="button">Restart</button>
+        <button id="debugToggle" type="button" aria-expanded="false">Tech Panel</button>
+      </div>
+
+      <div class="mobile-game-controls" aria-label="Mobile game controls">
+        <div class="virtual-joystick" id="virtualJoystick" role="application" aria-label="Virtual joystick">
+          <span id="joystickKnob" aria-hidden="true"></span>
+        </div>
+        <div class="mobile-action-row">
+          <button id="mobilePulse" type="button">Pulse</button>
+          <button id="mobilePause" type="button">Pause</button>
+          <button id="mobileRestart" type="button">Restart</button>
+        </div>
+      </div>
+
+      <div class="game-debug is-hidden" id="gameDebugPanel" aria-label="Technical game state">
+        <span>FPS <strong id="debugFps">0</strong></span>
+        <span>Mass <strong id="debugMass">1.0x</strong></span>
+        <span>Gravity radius <strong id="debugGravity">0</strong></span>
+        <span>Orbiting <strong id="debugOrbiting">0</strong></span>
+        <span>Absorbed <strong id="debugAbsorbed">0</strong></span>
+        <span>HP <strong id="debugHealth">100%</strong></span>
+        <span>Shield <strong id="debugShield">0</strong></span>
+        <span>Quality <strong id="debugQuality">High</strong></span>
+        <span>Stage <strong id="debugStage">Big Bang Particle</strong></span>
+        <span>XP <strong id="debugXp">0%</strong></span>
+        <span>Build <strong id="debugBuild">2026.07.13b</strong></span>
+      </div>
+
+      <p class="game-help">
+        Desktop: mouse for direction, WASD/arrows to steer, Space to brake, P to pause, R to restart, click for supernova.
+        Mobile: use the virtual joystick for steering, Pulse for supernova, or drag/tap inside the canvas.
+      </p>
+
+      <div class="leaderboard-panel">
+        <div class="leaderboard-head">
+          <div>
+            <p class="eyebrow">LOCAL LEADERBOARD</p>
+            <h3>Saved in this browser</h3>
+          </div>
+          <button id="clearScores" type="button">Clear</button>
+        </div>
+        <ol id="leaderboardList" class="leaderboard-list">
+          <li>No completed runs yet.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="case-study">
+      <article>
+        <h2>What This Demonstrates</h2>
+        <p>Game loop separation, input handling, procedural object generation, simplified orbital physics, collision/damage rules, animated absorption states and local persistence.</p>
+      </article>
+      <article>
+        <h2>Current Career Use</h2>
+        <p>This project supports a junior Python/QA profile by showing structured thinking, debugging mindset, state management and a practical game-development direction.</p>
+      </article>
+      <article>
+        <h2>Next Steps</h2>
+        <p>Future improvements can include missions, Web Audio, backend leaderboard, improved spatial partitioning and a C++/Unreal prototype inspired by the same mechanics.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built by Rusu Florin Teodor / TeoGame&3D as an original portfolio game prototype.</p>
+  </footer>
+
+  <script src="./js/cosmic-game.js"></script>
+</body>
+</html>
