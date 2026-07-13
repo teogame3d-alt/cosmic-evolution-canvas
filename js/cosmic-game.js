@@ -6,7 +6,7 @@
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const BUILD_VERSION = "2026.07.13b";
+  const BUILD_VERSION = "2026.07.13d";
   const SCORE_KEY = "tg3d-cosmic-evolution-scores";
 
   const ui = {
@@ -37,6 +37,10 @@
     debugStage: document.getElementById("debugStage"),
     debugXp: document.getElementById("debugXp"),
     debugBuild: document.getElementById("debugBuild"),
+    missionOrbit: document.getElementById("missionOrbit"),
+    missionAbsorb: document.getElementById("missionAbsorb"),
+    missionIntegrity: document.getElementById("missionIntegrity"),
+    missionStage: document.getElementById("missionStage"),
     completeTitle: document.getElementById("completeTitle"),
     finalScore: document.getElementById("finalScore"),
     finalMass: document.getElementById("finalMass"),
@@ -96,6 +100,7 @@
     impacts: 0,
     fragments: 0,
     damageTaken: 0,
+    maxOrbiting: 0,
     stars: [],
     bodies: [],
     particles: [],
@@ -168,8 +173,9 @@
 
   function gravityRadius() {
     const stage = currentStage();
-    const base = state.player.radius * (4.8 + state.stageIndex * 0.42);
-    return clamp(base + state.player.mass * 13 + stage.gravity * 34, 155, state.width < 640 ? 340 : 510);
+    const base = state.player.radius * (5.15 + state.stageIndex * 0.54);
+    const massField = state.player.mass * (16 + state.stageIndex * 0.8) + stage.gravity * 48;
+    return clamp(base + massField, 165, state.width < 640 ? 410 : 620);
   }
 
   function absorptionRadius() {
@@ -179,7 +185,15 @@
 
   function orbitCaptureRadius() {
     const stage = currentStage();
-    const scale = stage.type === "star" ? 0.78 : stage.type.includes("black") || stage.type === "supermassive" || stage.type === "collapse" ? 0.86 : 0.58;
+    const scale = stage.type === "star"
+      ? 0.88
+      : stage.type === "planet"
+        ? 0.78
+        : stage.type === "moon"
+          ? 0.72
+          : stage.type.includes("black") || stage.type === "supermassive" || stage.type === "collapse"
+            ? 0.94
+            : 0.6;
     return gravityRadius() * scale;
   }
 
@@ -239,6 +253,7 @@
     body.captured = true;
     body.orbitAlpha = 1;
     recordSoundCue(source === "pulse" ? "pulse-capture" : finalForm ? "gravity-absorb" : "orbital-absorb", clamp(body.value / 32, 0.25, 1));
+    absorptionImpact(body, finalForm, source);
   }
 
   function isBlackHoleStage(stage = currentStage()) {
@@ -270,6 +285,32 @@
   function healPlayer(amount) {
     if (amount <= 0 || state.mode !== "play") return;
     state.player.health = Math.min(state.player.maxHealth, state.player.health + amount);
+  }
+
+  function trimBodies(limit) {
+    while (state.bodies.length > limit) {
+      let removeIndex = -1;
+      let lowestPriority = Infinity;
+      const influence = gravityRadius() * 1.1;
+      for (let index = 0; index < state.bodies.length; index += 1) {
+        const body = state.bodies[index];
+        const dx = body.x - state.player.x;
+        const dy = body.y - state.player.y;
+        const distance = Math.hypot(dx, dy);
+        const protectedByGravity = distance < influence || body.absorbing || body.captured || body.orbiting || body.orbitAlpha > 0.08;
+        if (protectedByGravity) continue;
+
+        let priority = -distance * 0.01;
+        if (body.dangerous) priority += 340;
+        if (body.fragment) priority += 160;
+        if (priority < lowestPriority) {
+          lowestPriority = priority;
+          removeIndex = index;
+        }
+      }
+      if (removeIndex < 0) break;
+      state.bodies.splice(removeIndex, 1);
+    }
   }
 
   function resize() {
@@ -324,6 +365,7 @@
     state.impacts = 0;
     state.fragments = 0;
     state.damageTaken = 0;
+    state.maxOrbiting = 0;
     state.elapsed = 0;
     state.frame = 0;
     state.fps = 0;
@@ -452,6 +494,8 @@
     const start = stage.xp;
     const end = next ? next.xp : finalXp;
     const progress = clamp(((state.xp - start) / Math.max(1, end - start)) * 100, 0, 100);
+    const orbitingCount = state.bodies.filter((body) => body.orbiting || body.orbitAlpha > 0.05).length;
+    state.maxOrbiting = Math.max(state.maxOrbiting, orbitingCount);
 
     if (ui.score) ui.score.textContent = String(state.score);
     if (ui.xp) ui.xp.textContent = String(Math.floor(state.xp));
@@ -468,7 +512,7 @@
     if (ui.debugFps) ui.debugFps.textContent = String(Math.round(state.fps));
     if (ui.debugMass) ui.debugMass.textContent = `${state.player.mass.toFixed(1)}x`;
     if (ui.debugGravity) ui.debugGravity.textContent = String(Math.round(gravityRadius()));
-    if (ui.debugOrbiting) ui.debugOrbiting.textContent = String(state.bodies.filter((body) => body.orbiting || body.orbitAlpha > 0.05).length);
+    if (ui.debugOrbiting) ui.debugOrbiting.textContent = String(orbitingCount);
     if (ui.debugAbsorbed) ui.debugAbsorbed.textContent = String(state.absorbed);
     if (ui.debugHealth) ui.debugHealth.textContent = `${Math.round(state.player.health)}/${Math.round(state.player.maxHealth)}`;
     if (ui.debugShield) ui.debugShield.textContent = String(Math.round(state.player.shield));
@@ -476,6 +520,10 @@
     if (ui.debugStage) ui.debugStage.textContent = state.mode === "rebirth" ? "Universal Rebirth" : stage.name;
     if (ui.debugXp) ui.debugXp.textContent = `${Math.round(progress)}%`;
     if (ui.debugBuild) ui.debugBuild.textContent = BUILD_VERSION;
+    if (ui.missionOrbit) ui.missionOrbit.textContent = `${Math.min(state.maxOrbiting, 5)}/5`;
+    if (ui.missionAbsorb) ui.missionAbsorb.textContent = `${Math.min(state.absorbed, 24)}/24`;
+    if (ui.missionIntegrity) ui.missionIntegrity.textContent = `${Math.round(healthPercent())}%`;
+    if (ui.missionStage) ui.missionStage.textContent = stage.name;
   }
 
   function spawnBody(initial = false) {
@@ -547,9 +595,7 @@
 
     state.bodies.push(body);
     const limit = qualityLimit(state.width < 640 ? 18 : 30);
-    if (state.bodies.length > limit) {
-      state.bodies.splice(0, state.bodies.length - limit);
-    }
+    trimBodies(limit);
   }
 
   function addParticle(x, y, options = {}) {
@@ -585,6 +631,32 @@
         line: true,
       });
     }
+  }
+
+  function absorptionImpact(body, finalForm = false, source = "gravity") {
+    const color = finalForm ? "255, 216, 106" : source === "pulse" ? "255, 244, 191" : "85, 215, 255";
+    const force = finalForm ? 1.55 : source === "pulse" ? 1.25 : 1;
+    burst(body.x, body.y, 10 + Math.round(body.radius * 0.65 * force), color);
+    addParticle(body.x, body.y - body.radius - 8, {
+      label: source === "pulse" ? "PULSE" : "CAPTURE",
+      fontSize: state.width < 640 ? 11 : 13,
+      speed: 1,
+      angle: -Math.PI / 2 + rand(-0.24, 0.24),
+      radius: 0.1,
+      decay: 0.026,
+      color,
+      line: false,
+    });
+    state.rings.push({
+      x: body.x,
+      y: body.y,
+      radius: Math.max(8, body.radius * 0.74),
+      speed: finalForm ? 7.6 : 5.4,
+      life: 0.86,
+      decay: finalForm ? 0.024 : 0.038,
+      color,
+    });
+    if (state.rings.length > 9) state.rings.splice(0, state.rings.length - 9);
   }
 
   function supernova(x, y, count = 72, finalForm = false, rewardNearby = true) {
@@ -624,7 +696,6 @@
       if (distance < range && canBreak) {
         if (!body.absorbing) earned += Math.max(3, Math.round(body.value * 0.18));
         startAbsorption(body, finalForm, "pulse");
-        burst(body.x, body.y, 10 + Math.round(body.radius * 0.7), "255, 216, 106");
       }
     }
     if (earned > 0) addXp(earned, x, y);
@@ -837,6 +908,37 @@
     }
   }
 
+  function updateSecondaryGravity(dt) {
+    if (state.bodies.length < 2) return;
+    const maxBodies = state.quality === "low" ? 22 : 38;
+    const count = Math.min(state.bodies.length, maxBodies);
+    for (let i = 0; i < count; i += 1) {
+      for (let j = i + 1; j < count; j += 1) {
+        const first = state.bodies[i];
+        const second = state.bodies[j];
+        if (!first || !second || first.absorbing || second.absorbing) continue;
+
+        const larger = first.mass >= second.mass ? first : second;
+        const smaller = larger === first ? second : first;
+        if (larger.mass < smaller.mass * 1.18) continue;
+
+        const dx = larger.x - smaller.x;
+        const dy = larger.y - smaller.y;
+        const dist = Math.max(12, Math.hypot(dx, dy));
+        const influence = Math.max(74, larger.radius * 6.4 + smaller.radius * 2.2);
+        if (dist > influence) continue;
+
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const orbitalBand = clamp((influence - dist) / influence, 0, 1);
+        const pull = clamp((larger.mass * orbitalBand) / (dist * 0.72), 0, 0.018);
+        const tangent = orbitalBand * 0.008 * (smaller.orbitDir || 1);
+        smaller.vx += (nx * pull + -ny * tangent) * dt;
+        smaller.vy += (ny * pull + nx * tangent) * dt;
+      }
+    }
+  }
+
   function updateBodies(dt) {
     const player = state.player;
     const stage = currentStage();
@@ -886,10 +988,21 @@
         }
 
         if (progress >= 1 || dist < Math.max(5, player.radius * 0.35)) {
+          const gained = body.absorbValue || body.value;
           state.bodies.splice(i, 1);
           state.absorbed += 1;
-          addXp(body.absorbValue || body.value, body.x, body.y);
-          healPlayer(Math.max(0.4, (body.absorbValue || body.value) * 0.025));
+          addXp(gained, body.x, body.y);
+          healPlayer(Math.max(0.4, gained * 0.025));
+          addParticle(body.x, body.y - body.radius - 10, {
+            label: `+${Math.round(gained)} XP`,
+            fontSize: state.width < 640 ? 11 : 14,
+            speed: 1.35,
+            angle: -Math.PI / 2 + rand(-0.2, 0.2),
+            radius: 0.1,
+            decay: 0.024,
+            color: blackHoleLike ? "255, 216, 106" : "159, 240, 208",
+            line: false,
+          });
           burst(body.x, body.y, 10 + Math.round(body.absorbStartRadius || body.radius), blackHoleLike ? "255, 216, 106" : "85, 215, 255");
           if (blackHoleLike && state.rings.length < 8) {
             state.rings.push({
@@ -913,42 +1026,45 @@
       const distSq = Math.max(rawDist * rawDist + softened, 900);
       const nx = dx / rawDist;
       const ny = dy / rawDist;
-      const canCapture = blackHoleLike || player.mass > body.mass * 0.72 || player.radius > body.radius * 1.06;
+      const canCapture = blackHoleLike || body.fragment || player.mass > body.mass * 0.72 || player.radius > body.radius * 1.06;
       const tx = -ny * body.orbitDir;
       const ty = nx * body.orbitDir;
       const radialVelocity = body.vx * nx + body.vy * ny;
       const tangentVelocity = body.vx * tx + body.vy * ty;
 
-      if (canCapture && rawDist < gRadius) {
+      if (rawDist < gRadius) {
         const capture = clamp((gRadius - rawDist) / gRadius, 0, 1);
         const captureBand = clamp((captureRadius - rawDist) / Math.max(captureRadius, 1), 0, 1);
         const gravity = (stage.gravity * player.mass) / distSq;
-        const idealOrbit = player.radius * (1.75 + clamp(body.mass / Math.max(player.mass, 0.8), 0.08, 0.68)) + body.radius * 2.15;
+        const massPower = clamp(player.mass / Math.max(body.mass, 0.35), blackHoleLike ? 0.75 : 0.42, blackHoleLike ? 5.2 : 3.3);
+        const idealOrbit = player.radius * (1.95 + clamp(body.mass / Math.max(player.mass, 0.8), 0.08, 0.74)) + body.radius * 2.2;
         const innerBrake = rawDist < idealOrbit ? clamp((idealOrbit - rawDist) / idealOrbit, 0, 0.64) : 0;
         const outsideIdeal = rawDist > idealOrbit ? clamp((rawDist - idealOrbit) / Math.max(gRadius - idealOrbit, 1), 0, 1) : 0;
-        const orbitEligible = orbitalStage && (body.fragment || body.mass < player.mass * (blackHoleLike ? 4 : 1.45) || body.radius < player.radius * 1.18);
+        const orbitEligible = orbitalStage && canCapture && (body.fragment || body.mass < player.mass * (blackHoleLike ? 4.4 : 1.55) || body.radius < player.radius * 1.08);
         const targetOrbitSpeed = clamp(
-          Math.sqrt(Math.max(0.02, (stage.gravity * player.mass * (blackHoleLike ? 112 : 78)) / Math.max(rawDist, 34))),
+          Math.sqrt(Math.max(0.02, (stage.gravity * player.mass * (blackHoleLike ? 142 : 104)) / Math.max(rawDist, 34))),
           0.36,
-          blackHoleLike ? 5.4 : 2.25 + state.stageIndex * 0.18,
+          blackHoleLike ? 6.2 : 2.8 + state.stageIndex * 0.22,
         );
 
-        body.orbiting = true;
-        body.captured = orbitEligible && rawDist < captureRadius && Math.abs(radialVelocity) < (blackHoleLike ? 5.8 : 3.2);
+        body.orbiting = orbitEligible || rawDist < captureRadius * 0.82;
+        body.captured = orbitEligible && rawDist < captureRadius && Math.abs(radialVelocity) < (blackHoleLike ? 6.4 : 3.8);
         body.orbitAge = Math.min(240, (body.orbitAge || 0) + dt * (body.captured ? 1 : 0.38));
         body.orbitAlpha = Math.min(1, (body.orbitAlpha || 0) + 0.05 * dt);
         const radialAccel = (
-          (blackHoleLike ? 0.058 : 0.02) +
-          gravity * (blackHoleLike ? 260 : 150) +
-          capture * (blackHoleLike ? 0.04 : 0.018) +
-          outsideIdeal * (blackHoleLike ? 0.044 : 0.026) -
-          innerBrake * (blackHoleLike ? 0.04 : 0.052)
+          (blackHoleLike ? 0.072 : 0.026) +
+          gravity * (blackHoleLike ? 360 : 220) * massPower +
+          capture * (blackHoleLike ? 0.055 : 0.026) +
+          outsideIdeal * (blackHoleLike ? 0.055 : 0.034) -
+          innerBrake * (blackHoleLike ? 0.048 : 0.06)
         );
         const tangentCorrection = body.captured
           ? (targetOrbitSpeed - tangentVelocity) * (0.035 + captureBand * 0.045)
-          : 0;
-        const tangential = (blackHoleLike && rawDist < gRadius * 0.55 ? 0.016 : 0.028) + stage.gravity * 0.018 + capture * 0.032 + tangentCorrection;
-        const radialDamping = body.captured ? 0.035 + captureBand * 0.06 : 0.012;
+          : orbitEligible
+            ? (targetOrbitSpeed * 0.68 - tangentVelocity) * (0.014 + captureBand * 0.018)
+            : (targetOrbitSpeed * 0.42 - tangentVelocity) * (0.006 + captureBand * 0.008);
+        const tangential = (blackHoleLike && rawDist < gRadius * 0.55 ? 0.02 : 0.034) + stage.gravity * 0.026 + capture * 0.044 + tangentCorrection;
+        const radialDamping = body.captured ? 0.042 + captureBand * 0.074 : orbitEligible ? 0.022 : 0.012;
 
         body.vx += (nx * radialAccel + tx * tangential) * dt;
         body.vy += (ny * radialAccel + ty * tangential) * dt;
@@ -956,7 +1072,7 @@
         body.vy -= ny * radialVelocity * radialDamping * dt;
 
         const speed = Math.hypot(body.vx, body.vy);
-        const maxSpeed = blackHoleLike ? 4.4 + capture * 2.35 : 2.35 + state.stageIndex * 0.18 + capture * 1.15;
+        const maxSpeed = blackHoleLike ? 5.2 + capture * 2.75 : 2.85 + state.stageIndex * 0.22 + capture * 1.45;
         if (speed > maxSpeed) {
           body.vx = (body.vx / speed) * maxSpeed;
           body.vy = (body.vy / speed) * maxSpeed;
@@ -981,7 +1097,8 @@
       body.angle += body.spin * 0.018 * dt;
 
       const edge = 140;
-      if (body.x < -edge || body.x > state.width + edge || body.y < -edge || body.y > state.height + edge) {
+      const outsideStage = body.x < -edge || body.x > state.width + edge || body.y < -edge || body.y > state.height + edge;
+      if (outsideStage && rawDist > gRadius * 1.14 && !body.captured && !body.absorbing) {
         state.bodies.splice(i, 1);
         continue;
       }
@@ -997,14 +1114,15 @@
         const relativeSpeed = Math.hypot(player.vx - body.vx, player.vy - body.vy);
         const sizeRatio = body.radius / Math.max(player.radius, 1);
         const massRatio = body.mass / Math.max(player.mass, 0.35);
-        const canAbsorb = blackHoleLike || player.radius * 1.08 >= body.radius || player.mass > body.mass * 1.12 || body.fragment;
+        const canAbsorb = blackHoleLike || body.fragment || body.radius <= player.radius * 0.98;
+        const canDamage = !blackHoleLike && !canAbsorb && body.radius > player.radius * 1.02;
         const holdOrbit = !blackHoleLike &&
           orbitalStage &&
           body.captured &&
           !body.fragment &&
-          body.orbitAge < (stage.type === "star" ? 112 : 74) &&
+          body.orbitAge < (stage.type === "star" ? 190 : stage.type === "planet" ? 160 : 132) &&
           canAbsorb &&
-          body.radius < player.radius * 1.08;
+          body.radius < player.radius * 0.98;
         if (holdOrbit) {
           const orbitPush = contactDistance + 10 + Math.sin(body.orbitAge * 0.08) * 3;
           body.x = player.x - hitNx * orbitPush;
@@ -1016,6 +1134,12 @@
 
         if (canAbsorb) {
           startAbsorption(body, blackHoleLike, "gravity");
+          continue;
+        }
+
+        if (!canDamage) {
+          body.vx -= hitNx * 1.75;
+          body.vy -= hitNy * 1.75;
           continue;
         }
 
@@ -1072,11 +1196,10 @@
     }
 
     updatePlayer(dt);
+    updateSecondaryGravity(dt);
     updateBodies(dt);
     const bodyLimit = qualityLimit(state.width < 640 ? 28 : 44);
-    if (state.bodies.length > bodyLimit) {
-      state.bodies.splice(0, state.bodies.length - bodyLimit);
-    }
+    trimBodies(bodyLimit);
     updateParticles(dt);
   }
 
@@ -1252,8 +1375,32 @@
 
   function drawOrbitTrails(time) {
     const player = state.player;
+    const activeBodies = state.bodies.filter((body) => body.orbitAlpha > 0.08 || body.captured || body.absorbing);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    if (activeBodies.length >= 2) {
+      const ringAlpha = clamp(activeBodies.length / 7, 0.18, 0.58);
+      const ringBase = Math.max(player.radius * 2.5, orbitCaptureRadius() * 0.28);
+      for (let layer = 0; layer < 3; layer += 1) {
+        const color = layer % 2 ? "255, 216, 106" : "85, 215, 255";
+        ctx.strokeStyle = `rgba(${color}, ${ringAlpha * (0.22 - layer * 0.035)})`;
+        ctx.shadowColor = `rgba(${color}, ${ringAlpha * 0.42})`;
+        ctx.shadowBlur = 12 - layer * 2;
+        ctx.lineWidth = 1 + layer * 0.35;
+        ctx.beginPath();
+        ctx.ellipse(
+          player.x,
+          player.y,
+          ringBase + player.radius * layer * 0.72,
+          (ringBase + player.radius * layer * 0.72) * (0.42 + layer * 0.06),
+          player.angle * 0.28 + time * 0.00032 * (layer % 2 ? -1 : 1),
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+      }
+    }
+
     for (const body of state.bodies) {
       const alpha = body.orbitAlpha || 0;
       if (alpha <= 0.02) continue;
@@ -1369,15 +1516,7 @@
       ctx.fill();
     }
 
-    if (state.mode === "play" && !body.fragment && body.radius > state.player.radius * 1.04) {
-      ctx.strokeStyle = "rgba(255, 108, 108, 0.72)";
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = "rgba(255, 108, 108, 0.6)";
-      ctx.shadowBlur = 14;
-      ctx.beginPath();
-      ctx.arc(0, 0, body.radius * 1.18, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (body.fragment) {
+    if (body.fragment) {
       ctx.strokeStyle = "rgba(159, 240, 208, 0.42)";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1624,7 +1763,11 @@
     if (event.pointerType !== "touch" && event.pointerType !== "pen" && state.running && !state.paused && state.mode === "play") {
       supernova(point.x, point.y, state.stageIndex >= 5 ? 86 : 48, state.stageIndex >= 5);
     }
-    canvas.setPointerCapture?.(event.pointerId);
+    try {
+      canvas.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Synthetic mobile tests and some browser gestures may not expose an active pointer capture target.
+    }
   }
 
   function movePointer(event) {
@@ -1650,7 +1793,11 @@
     if (isTap && state.running && !state.paused && state.mode === "play") {
       supernova(point.x, point.y, state.stageIndex >= 5 ? 86 : 48, state.stageIndex >= 5);
     }
-    canvas.releasePointerCapture?.(event.pointerId);
+    try {
+      canvas.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Matching defensive guard for browsers that already released the pointer.
+    }
   }
 
   function setJoystickVector(x, y, strength) {
@@ -1684,7 +1831,11 @@
     state.joystick.active = true;
     state.joystick.pointerId = event.pointerId;
     updateJoystickFromEvent(event);
-    ui.joystick?.setPointerCapture?.(event.pointerId);
+    try {
+      ui.joystick?.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is optional for the virtual joystick.
+    }
   }
 
   function moveJoystick(event) {
@@ -1700,7 +1851,11 @@
     state.joystick.pointerId = null;
     setJoystickVector(0, 0, 0);
     state.pointer.active = false;
-    ui.joystick?.releasePointerCapture?.(event.pointerId);
+    try {
+      ui.joystick?.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture may already be released on touch cancellation.
+    }
   }
 
   function triggerPlayerPulse() {
@@ -1843,6 +1998,7 @@
     highestStage: stages[state.highestStageIndex]?.name || currentStage().name,
     bodies: state.bodies.length,
     orbiting: state.bodies.filter((body) => body.orbiting || body.orbitAlpha > 0.05).length,
+    maxOrbiting: state.maxOrbiting,
     captured: state.bodies.filter((body) => body.captured).length,
     absorbing: state.bodies.filter((body) => body.absorbing).length,
     absorbed: state.absorbed,

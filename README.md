@@ -12,8 +12,11 @@ This project is meant to demonstrate junior-level engineering signals in a visua
 - HTML5 Canvas rendering
 - procedural asteroid and planet generation
 - simplified orbital gravity
+- secondary body-to-body gravity for small orbital interactions
 - collision, damage and fragment systems
 - animated absorption states instead of instant object removal
+- gravity-safe cleanup so captured bodies are not removed while inside the influence field
+- run objectives that expose the technical goals during play
 - mobile and desktop input handling
 - localStorage leaderboard
 - debug state that can be inspected from the browser console
@@ -24,8 +27,9 @@ The career goal behind the project is practical: build a stable Python / QA foun
 
 - Start as a vulnerable Big Bang particle.
 - Absorb smaller bodies to gain XP and mass.
-- Larger bodies can damage the player and fracture into smaller pieces.
+- Only larger bodies damage the player and fracture into smaller pieces.
 - Captured bodies can orbit temporarily before being absorbed.
+- A small objective panel tracks orbital capture, clean absorption, integrity and stage progress.
 - Advanced stages add stronger gravity and black-hole style visual absorption.
 - A complete run enters Cosmic Collapse and Universal Rebirth.
 
@@ -69,7 +73,7 @@ In the browser console:
 window.__tg3dGameDebug()
 ```
 
-This returns score, stage, bodies, orbiting objects, captured objects, absorbing objects, health, fragments, quality mode, FPS and other runtime signals.
+This returns score, stage, bodies, orbiting objects, maximum orbiting count, captured objects, absorbing objects, health, fragments, quality mode, FPS and other runtime signals.
 
 ## Portfolio Context
 
@@ -79,7 +83,7 @@ This returns score, stage, bodies, orbiting objects, captured objects, absorbing
 
 ## Roadmap
 
-- Add mission objectives and survival targets.
+- Tune mission objectives and survival targets after more playtesting.
 - Add optional Web Audio feedback.
 - Add a backend leaderboard.
 - Improve spatial partitioning for larger simulations.
