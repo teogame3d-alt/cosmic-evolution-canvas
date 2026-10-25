@@ -4,11 +4,11 @@ Cosmic Evolution is an original HTML5 Canvas gravity game prototype built as a p
 
 It is not a clone of any commercial game. The project uses a familiar cosmic sandbox idea - mass growth, gravity, orbiting bodies, hazards and a final universe cycle - as a small, inspectable browser-game case study.
 
-## Portfolio Demo & Authorship Note
+## Scope and ownership
 
-This repository is public on purpose: recruiters and technical reviewers can inspect the implementation, run the game locally, and compare it with the live portfolio deployment.
-
-The code is released for learning and review under the repository license. The TeoGame&3D branding, personal portfolio presentation, authorship context and visual identity remain associated with Rusu Florin Teodor and should not be reused to impersonate this portfolio or present the project as someone else's original career work.
+This is an original browser-game prototype released under the repository license. The TeoGame&3D
+branding and visual identity remain associated with the author; the code, gameplay rules, and setup
+are documented here for normal technical use and review.
 
 ## Why This Project Exists
 
@@ -29,7 +29,8 @@ This project is meant to demonstrate junior-level engineering signals in a visua
 - debug state that can be inspected from the browser console
 - a small C++ rules prototype for future native/WASM validation experiments
 
-The career goal behind the project is practical: build a stable Python / QA foundation now, while developing a longer-term game-development direction through small, reviewable projects.
+The project is intentionally scoped as a small, inspectable game system: browser runtime first,
+native/WASM experiments later.
 
 ## Gameplay Systems
 
@@ -90,7 +91,7 @@ This returns score, stage, bodies, orbiting objects, maximum orbiting count, cap
 
 The browser game runs in JavaScript because the portfolio site is static. The `cpp/cosmic_rules.cpp` file is a small C++17 reference module for collision, absorption and gravity-radius rules. It is included to show how the gameplay rules could later be moved toward a native module, WebAssembly experiment, Unreal prototype or backend score validation service.
 
-## Portfolio Context
+## Live links
 
 - Live portfolio case study: https://teogame3d-site.pages.dev/programming.html
 - GitHub profile: https://github.com/teogame3d-alt
@@ -104,6 +105,12 @@ The browser game runs in JavaScript because the portfolio site is static. The `c
 - Add a backend leaderboard.
 - Improve spatial partitioning for larger simulations.
 - Expand the C++ rules prototype into a small native / Unreal learning prototype using the same design idea.
+
+## Current status
+
+Working browser prototype with desktop/mobile controls, progression, collision and gravity systems,
+local scoring, and a JavaScript syntax-check path. See [the changelog](CHANGELOG.md) for the latest
+documentation and maintenance update.
 
 ## License
 
